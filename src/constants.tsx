@@ -8,29 +8,50 @@ export const NAV_LINKS = [
 
 export const CONTRIBUTORS = [
   {
-    name: "0xNeo",
-    role: "Security Researcher",
+    name: "Fathur Wiriansyah",
+    role: "DevSecOps | IT Infrastructure",
     avatar: "https://picsum.photos/seed/neo/200/200",
-    github: "#",
-    linkedin: "#"
+    github: "https://github.com/Wrianzz",
+    linkedin: "https://id.linkedin.com/in/fathurw"
   },
   {
-    name: "CloudOps",
-    role: "Cloud Engineer",
+    name: "Joenery Pratama",
+    role: "Security Engineer | AI Enthusiast",
     avatar: "https://picsum.photos/seed/cloud/200/200",
-    github: "#",
-    linkedin: "#"
+    github: "https://github.com/KazehuntGit",
+    linkedin: "https://id.linkedin.com/in/joenerypratama"
   },
   {
-    name: "SysAdminX",
-    role: "DevSecOps",
+    name: "Putri Syajah",
+    role: "AI/ML Engineer | IT GRC",
     avatar: "https://picsum.photos/seed/sysadmin/200/200",
     github: "#",
     linkedin: "#"
   },
   {
-    name: "CipherM",
-    role: "Cryptography Analyst",
+    name: "M Reza Pahlevi",
+    role: "Security Engineer | CTF Enthusiast",
+    avatar: "https://picsum.photos/seed/cipher/200/200",
+    github: "#",
+    linkedin: "#"
+  },
+  {
+    name: "Raihan Julyandri",
+    role: "Network Security | CTF Enthusiast",
+    avatar: "https://picsum.photos/seed/cipher/200/200",
+    github: "#",
+    linkedin: "#"
+  },
+  {
+    name: "M Farhandi Rahim",
+    role: "Security Audit | Security Engineer",
+    avatar: "https://picsum.photos/seed/cipher/200/200",
+    github: "#",
+    linkedin: "#"
+  },
+    {
+    name: "M Hafiz Pratama",
+    role: "SOC Analyst | Software Engineer",
     avatar: "https://picsum.photos/seed/cipher/200/200",
     github: "#",
     linkedin: "#"
