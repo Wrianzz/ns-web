@@ -34,8 +34,10 @@ export default function App() {
           <Route path="/admin" element={<AdminLayout />}>
             <Route path="blogs" element={<AdminBlogList />} />
             <Route path="blogs/new" element={<AdminBlogEditor />} />
+            <Route path="blogs/edit/:id" element={<AdminBlogEditor />} />
             <Route path="events" element={<AdminEventList />} />
             <Route path="events/new" element={<AdminEventEditor />} />
+            <Route path="events/edit/:id" element={<AdminEventEditor />} />
           </Route>
 
           {/* Public Routes with Navbar & Footer */}

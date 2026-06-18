@@ -103,6 +103,12 @@ export function AdminBlogList() {
                         >
                           Lihat
                         </Link>
+                        <Link 
+                          to={`/admin/blogs/edit/${blog.id}`} 
+                          className="p-[6px] text-[var(--text-secondary)] hover:bg-[var(--bg)] border border-[var(--border)] rounded-[6px] transition-colors"
+                        >
+                          <Edit size={16} />
+                        </Link>
                         <button 
                           onClick={() => handleDelete(blog.id)}
                           className="p-[6px] text-red-500 hover:bg-red-500/10 rounded-[6px] transition-colors"

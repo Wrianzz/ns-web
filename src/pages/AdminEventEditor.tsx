@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -10,11 +10,13 @@ import { Save, ArrowLeft } from "lucide-react";
 export function AdminEventEditor() {
   const [user] = useAuthState();
   const navigate = useNavigate();
+  const { id } = useParams();
   const [title, setTitle] = useState("");
   const [type, setType] = useState("");
   const [date, setDate] = useState("");
   const [image, setImage] = useState("");
   const [saving, setSaving] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(!!id);
 
   const editor = useEditor({
     extensions: [
@@ -32,6 +34,27 @@ export function AdminEventEditor() {
     },
   });
 
+  useEffect(() => {
+    const fetchEvent = async () => {
+      if (!id || !editor) return;
+      try {
+        const docSnap = await databases.getDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_EVENTS, id);
+        if (docSnap) {
+          setTitle(docSnap.title || "");
+          setType(docSnap.type || "");
+          setDate(docSnap.date || "");
+          setImage(docSnap.image || "");
+          editor.commands.setContent(docSnap.content || "");
+        }
+      } catch (err) {
+        console.error("Failed to fetch event", err);
+      } finally {
+        setInitialLoading(false);
+      }
+    };
+    fetchEvent();
+  }, [id, editor]);
+
   const handleSave = async () => {
     if (!title.trim() || !type.trim() || !date.trim() || !image.trim() || !editor?.getHTML() || !user) return;
     
@@ -43,12 +66,18 @@ export function AdminEventEditor() {
         date,
         image,
         content: editor.getHTML(),
-        authorId: user.$id,
-        createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
-      await databases.createDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_EVENTS, ID.unique(), payload);
+      if (id) {
+        await databases.updateDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_EVENTS, id, payload);
+      } else {
+        await databases.createDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_EVENTS, ID.unique(), {
+          ...payload,
+          authorId: user.$id,
+          createdAt: new Date().toISOString(),
+        });
+      }
       navigate("/admin/events");
     } catch (error) {
       console.error("Failed to save event", error);
@@ -56,7 +85,11 @@ export function AdminEventEditor() {
     }
   };
 
-  if (!editor) return null;
+  if (!editor || initialLoading) return (
+    <div className="flex-1 flex items-center justify-center">
+      <div className="animate-spin text-[var(--accent)]">Memuat...</div>
+    </div>
+  );
 
   return (
     <div className="flex-1 flex flex-col items-center bg-[var(--bg)] font-sans">

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { databases, APPWRITE_DB_ID, APPWRITE_COLLECTION_EVENTS, Query } from "../lib/appwrite";
-import { Trash2 } from "lucide-react";
+import { Trash2, Edit } from "lucide-react";
 import { format } from "date-fns";
 
 interface EventItem {
@@ -99,6 +99,12 @@ export function AdminEventList() {
                           className="px-[12px] py-[6px] text-[13px] font-[500] border border-[var(--border)] rounded-[6px] hover:bg-[var(--bg)] text-[var(--text-secondary)]"
                         >
                           Lihat
+                        </Link>
+                        <Link 
+                          to={`/admin/events/edit/${ev.id}`} 
+                          className="p-[6px] text-[var(--text-secondary)] hover:bg-[var(--bg)] border border-[var(--border)] rounded-[6px] transition-colors"
+                        >
+                          <Edit size={16} />
                         </Link>
                         <button 
                           onClick={() => handleDelete(ev.id)}

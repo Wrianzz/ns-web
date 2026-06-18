@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -10,11 +10,13 @@ import { Save, ArrowLeft } from "lucide-react";
 export function AdminBlogEditor() {
   const [user] = useAuthState();
   const navigate = useNavigate();
+  const { id } = useParams();
   const [title, setTitle] = useState("");
   const [excerpt, setExcerpt] = useState("");
   const [coverImage, setCoverImage] = useState("");
   const [tags, setTags] = useState("");
   const [saving, setSaving] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(!!id);
 
   const editor = useEditor({
     extensions: [
@@ -32,6 +34,27 @@ export function AdminBlogEditor() {
     },
   });
 
+  useEffect(() => {
+    const fetchBlog = async () => {
+      if (!id || !editor) return;
+      try {
+        const docSnap = await databases.getDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_BLOGS, id);
+        if (docSnap) {
+          setTitle(docSnap.title || "");
+          setExcerpt(docSnap.excerpt || "");
+          setCoverImage(docSnap.coverImage || "");
+          setTags(docSnap.tags?.join(", ") || "");
+          editor.commands.setContent(docSnap.content || "");
+        }
+      } catch (err) {
+        console.error("Failed to fetch blog", err);
+      } finally {
+        setInitialLoading(false);
+      }
+    };
+    fetchBlog();
+  }, [id, editor]);
+
   const handleSave = async () => {
     if (!title.trim() || !editor?.getHTML() || !user) return;
     
@@ -45,15 +68,21 @@ export function AdminBlogEditor() {
         content: editor.getHTML(),
         coverImage: coverImage || "https://picsum.photos/seed/cyber/1200/600",
         tags: tagArray,
-        authorId: user.$id,
-        authorName: user.name || user.email,
-        authorAvatar: `https://picsum.photos/seed/${user.$id}/200/200`,
-        createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         readTime: `${Math.max(1, Math.ceil(editor.getText().split(" ").length / 200))} min read`
       };
 
-      await databases.createDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_BLOGS, ID.unique(), payload);
+      if (id) {
+        await databases.updateDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_BLOGS, id, payload);
+      } else {
+        await databases.createDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_BLOGS, ID.unique(), {
+          ...payload,
+          authorId: user.$id,
+          authorName: user.name || user.email,
+          authorAvatar: `https://picsum.photos/seed/${user.$id}/200/200`,
+          createdAt: new Date().toISOString(),
+        });
+      }
       navigate("/admin/blogs");
     } catch (error) {
       console.error("Failed to save blog", error);
@@ -61,7 +90,11 @@ export function AdminBlogEditor() {
     }
   };
 
-  if (!editor) return null;
+  if (!editor || initialLoading) return (
+    <div className="flex-1 flex items-center justify-center">
+      <div className="animate-spin text-[var(--accent)]">Memuat...</div>
+    </div>
+  );
 
   return (
     <div className="flex-1 flex flex-col items-center bg-[var(--bg)] font-sans">
