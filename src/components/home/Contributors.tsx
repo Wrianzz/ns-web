@@ -17,23 +17,17 @@ export function Contributors() {
 
     let animationFrameId: number;
     let lastTime = performance.now();
-    let exactScrollLeft = el.scrollLeft;
 
     const loop = (time: number) => {
       const deltaTime = time - lastTime;
       lastTime = time;
 
       if (!isInteracting.current && !isDragging.current) {
-        exactScrollLeft += (deltaTime * 30) / 1000;
+        el.scrollLeft += (deltaTime * 30) / 1000;
         
-        if (exactScrollLeft >= el.scrollWidth / 2) {
-          exactScrollLeft -= el.scrollWidth / 2;
+        if (el.scrollLeft >= el.scrollWidth / 2) {
+          el.scrollLeft -= el.scrollWidth / 2;
         }
-        
-        el.scrollLeft = Math.floor(exactScrollLeft);
-      } else {
-        // If interacting, sync the exact scroll with real DOM
-        exactScrollLeft = el.scrollLeft;
       }
       animationFrameId = requestAnimationFrame(loop);
     };
@@ -105,10 +99,11 @@ export function Contributors() {
         <div
           ref={scrollRef}
           onScroll={handleScroll}
+          onMouseEnter={onTouchStart}
+          onMouseLeave={onMouseUpOrLeave}
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUpOrLeave}
-          onMouseLeave={onMouseUpOrLeave}
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
           className="flex gap-[20px] px-[20px] w-full overflow-x-auto items-stretch cursor-grab [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
