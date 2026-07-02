@@ -14,6 +14,7 @@ export { ID, Query };
 export const APPWRITE_DB_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID || 'your-database-id';
 export const APPWRITE_COLLECTION_EVENTS = import.meta.env.VITE_APPWRITE_COLLECTION_EVENTS || 'events';
 export const APPWRITE_COLLECTION_BLOGS = import.meta.env.VITE_APPWRITE_COLLECTION_BLOGS || 'blogs';
+export const APPWRITE_BUCKET_ID = import.meta.env.VITE_APPWRITE_BUCKET_ID || 'your-bucket-id';
 
 // Custom hook matching replacing react-firebase-hooks/auth
 export function useAuthState() {
