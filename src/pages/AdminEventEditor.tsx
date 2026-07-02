@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { databases, storage, APPWRITE_DB_ID, APPWRITE_COLLECTION_EVENTS, APPWRITE_BUCKET_ID, ID, useAuthState } from "../lib/appwrite";
-import { Permission, Role } from "appwrite";
 import { Save, ArrowLeft, Upload } from "lucide-react";
 
 declare global {
@@ -20,25 +19,18 @@ export function AdminEventEditor() {
   const [image, setImage] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(!!id && id !== "new");
+  const [initialLoading, setInitialLoading] = useState(!!id);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editorRef = useRef<any>(null);
   const contentRef = useRef<string>("");
 
-  const uploadToAppwrite = async (file: File | Blob, filename = "image.png") => {
-    const actualFile = file instanceof File ? file : new File([file], filename, { type: file.type });
+  const uploadToAppwrite = async (file: File) => {
+    const uploadedFile = await storage.createFile(APPWRITE_BUCKET_ID, ID.unique(), file);
+    const fileUrl = storage.getFileView(APPWRITE_BUCKET_ID, uploadedFile.$id);
     
-    const uploadedFile = await storage.createFile(
-      APPWRITE_BUCKET_ID, 
-      ID.unique(), 
-      actualFile,
-      [Permission.read(Role.any())]
-    );
-    
-    const fileView = storage.getFileView(APPWRITE_BUCKET_ID, uploadedFile.$id);
-    const url = typeof fileView === "string" ? fileView : fileView.toString();
-    return url;
+    // Periksa apakah fileUrl berupa string atau objek URL
+    return typeof fileUrl === 'string' ? fileUrl : fileUrl.href;
   };
 
   const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -46,14 +38,13 @@ export function AdminEventEditor() {
     if (!file) return;
     setUploadingImage(true);
     try {
-      const url = await uploadToAppwrite(file, file.name);
+      const url = await uploadToAppwrite(file);
       setImage(url);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Gagal upload thumbnail:", error);
-      alert("Gagal mengunggah gambar thumbnail: " + error.message);
+      alert("Gagal mengunggah gambar thumbnail.");
     } finally {
       setUploadingImage(false);
-      e.target.value = "";
     }
   };
 
@@ -76,9 +67,11 @@ export function AdminEventEditor() {
         branding: false,
         promotion: false,
         
+        // KONFIGURASI UPLOAD GAMBAR TINYMCE KE APPWRITE
         images_upload_handler: async (blobInfo: any) => {
           try {
-            const url = await uploadToAppwrite(blobInfo.blob(), blobInfo.filename());
+            const file = blobInfo.blob() as File;
+            const url = await uploadToAppwrite(file);
             return url;
           } catch (err: any) {
             throw new Error("Gagal mengunggah: " + err.message);
@@ -116,7 +109,7 @@ export function AdminEventEditor() {
 
   useEffect(() => {
     const fetchEvent = async () => {
-      if (!id || id === "new") return;
+      if (!id) return;
       try {
         const docSnap = await databases.getDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_EVENTS, id);
         if (docSnap) {
@@ -155,7 +148,7 @@ export function AdminEventEditor() {
         updatedAt: new Date().toISOString(),
       };
 
-      if (id && id !== "new") {
+      if (id) {
         await databases.updateDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_EVENTS, id, payload);
       } else {
         await databases.createDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_EVENTS, ID.unique(), {
@@ -165,9 +158,8 @@ export function AdminEventEditor() {
         });
       }
       navigate("/admin/events");
-    } catch (error: any) {
+    } catch (error) {
       console.error("Failed to save event", error);
-      alert("Gagal menyimpan ke database: " + error.message);
       setSaving(false);
     }
   };
@@ -207,15 +199,31 @@ export function AdminEventEditor() {
           </div>
           <div>
             <label className="block text-[13px] font-[600] text-[var(--text-secondary)] mb-[8px]">Gambar Thumbnail Event</label>
-            <div className="flex items-center gap-[12px]">
-              {image && (
-                <img src={image} alt="Thumbnail Preview" className="h-[42px] w-[60px] object-cover rounded-[4px] border border-[var(--border)]" />
+            
+            {/* UPLOAD EVENT IMAGE AREA */}
+            <div className="w-full">
+              {image ? (
+                <div className="relative group w-full h-[160px] rounded-[8px] overflow-hidden border border-[var(--border)] bg-[var(--bg)]">
+                  <img src={image} alt="Thumbnail Preview" className="w-full h-full object-cover" />
+
+                  {/* Overlay yang muncul saat di-hover */}
+                  <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-opacity text-white backdrop-blur-sm">
+                    <Upload size={24} className="mb-2" />
+                    <span className="text-[14px] font-[600]">
+                      {uploadingImage ? "Mengunggah..." : "Ganti Thumbnail Event"}
+                    </span>
+                    <input type="file" accept="image/*" onChange={handleThumbnailUpload} className="hidden" disabled={uploadingImage} />
+                  </label>
+                </div>
+              ) : (
+                <label className="w-full h-[160px] cursor-pointer flex flex-col items-center justify-center gap-[12px] bg-[var(--bg)] border border-[var(--border)] border-dashed rounded-[8px] px-[16px] py-[10px] text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--text-primary)] transition-colors">
+                  <Upload size={28} />
+                  <span className="text-[14px]">
+                    {uploadingImage ? "Mengunggah..." : "Pilih File Gambar Lokal"}
+                  </span>
+                  <input type="file" accept="image/*" onChange={handleThumbnailUpload} className="hidden" disabled={uploadingImage} />
+                </label>
               )}
-              <label className="flex-1 cursor-pointer flex items-center justify-center gap-[8px] bg-[var(--bg)] border border-[var(--border)] border-dashed rounded-[8px] px-[16px] py-[10px] text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--text-primary)] transition-colors">
-                <Upload size={16} />
-                <span className="text-[14px]">{uploadingImage ? "Mengunggah..." : "Pilih File Gambar Lokal"}</span>
-                <input type="file" accept="image/*" onChange={handleThumbnailUpload} className="hidden" disabled={uploadingImage} />
-              </label>
             </div>
           </div>
         </div>

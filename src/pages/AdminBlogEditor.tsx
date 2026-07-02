@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { databases, storage, APPWRITE_DB_ID, APPWRITE_COLLECTION_BLOGS, APPWRITE_BUCKET_ID, ID, useAuthState } from "../lib/appwrite";
-import { Permission, Role } from "appwrite";
 import { Save, ArrowLeft, Upload } from "lucide-react";
 
 declare global {
@@ -20,27 +19,19 @@ export function AdminBlogEditor() {
   const [tags, setTags] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(!!id && id !== "new");
+  const [initialLoading, setInitialLoading] = useState(!!id);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editorRef = useRef<any>(null);
   const contentRef = useRef<string>("");
 
-  // KODE FIX UTAMA: Konversi yang benar dan cegah undefined URL
-  const uploadImageToAppwrite = async (file: File | Blob, filename = "image.png") => {
-    const actualFile = file instanceof File ? file : new File([file], filename, { type: file.type });
-    
-    const uploadedFile = await storage.createFile(
-      APPWRITE_BUCKET_ID, 
-      ID.unique(), 
-      actualFile,
-      [Permission.read(Role.any())] // Memaksa agar file bisa dibaca publik
-    );
-    
-    const fileView = storage.getFileView(APPWRITE_BUCKET_ID, uploadedFile.$id);
-    // Hindari pemakaian .href langsung karena rawan menjadi undefined
-    const url = typeof fileView === "string" ? fileView : fileView.toString();
-    return url;
+  // Fungsi untuk upload gambar (dipakai TinyMCE & Cover)
+  const uploadImageToAppwrite = async (file: File) => {
+    const uploadedFile = await storage.createFile(APPWRITE_BUCKET_ID, ID.unique(), file);
+    const fileUrl = storage.getFileView(APPWRITE_BUCKET_ID, uploadedFile.$id);
+
+    // Periksa apakah fileUrl berupa string atau objek URL
+    return typeof fileUrl === 'string' ? fileUrl : fileUrl.href;
   };
 
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -48,14 +39,13 @@ export function AdminBlogEditor() {
     if (!file) return;
     setUploadingCover(true);
     try {
-      const url = await uploadImageToAppwrite(file, file.name);
+      const url = await uploadImageToAppwrite(file);
       setCoverImage(url);
-    } catch (error: any) {
+    } catch (error) {
       console.error("Gagal upload cover:", error);
-      alert("Gagal mengunggah gambar cover: " + error.message);
+      alert("Gagal mengunggah gambar cover.");
     } finally {
       setUploadingCover(false);
-      e.target.value = ""; 
     }
   };
 
@@ -78,10 +68,12 @@ export function AdminBlogEditor() {
         branding: false,
         promotion: false,
         
+        // KONFIGURASI UPLOAD GAMBAR TINYMCE KE APPWRITE
         images_upload_handler: async (blobInfo: any) => {
           try {
-            const url = await uploadImageToAppwrite(blobInfo.blob(), blobInfo.filename());
-            return url;
+            const file = blobInfo.blob() as File;
+            const url = await uploadImageToAppwrite(file);
+            return url; // TinyMCE otomatis memasang URL ini ke tag <img>
           } catch (err: any) {
             throw new Error("Gagal mengunggah: " + err.message);
           }
@@ -118,7 +110,7 @@ export function AdminBlogEditor() {
 
   useEffect(() => {
     const fetchBlog = async () => {
-      if (!id || id === "new") return;
+      if (!id) return;
       try {
         const docSnap = await databases.getDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_BLOGS, id);
         if (docSnap) {
@@ -162,7 +154,7 @@ export function AdminBlogEditor() {
         readTime: `${Math.max(1, Math.ceil(wordCount / 200))} min read`
       };
 
-      if (id && id !== "new") {
+      if (id) {
         await databases.updateDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_BLOGS, id, payload);
       } else {
         await databases.createDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_BLOGS, ID.unique(), {
@@ -174,9 +166,8 @@ export function AdminBlogEditor() {
         });
       }
       navigate("/admin/blogs");
-    } catch (error: any) {
+    } catch (error) {
       console.error("Failed to save blog", error);
-      alert("Gagal menyimpan ke database: " + error.message);
       setSaving(false);
     }
   };
@@ -211,15 +202,31 @@ export function AdminBlogEditor() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-[16px]">
             <div>
               <label className="block text-[13px] font-[600] text-[var(--text-secondary)] mb-[8px]">Gambar Sampul</label>
-              <div className="flex items-center gap-[12px]">
-                {coverImage && (
-                  <img src={coverImage} alt="Cover Preview" className="h-[42px] w-[60px] object-cover rounded-[4px] border border-[var(--border)]" />
+              
+              {/* UPLOAD COVER IMAGE AREA */}
+              <div className="w-full">
+                {coverImage ? (
+                  <div className="relative group w-full h-[160px] rounded-[8px] overflow-hidden border border-[var(--border)] bg-[var(--bg)]">
+                    <img src={coverImage} alt="Cover Preview" className="w-full h-full object-cover" />
+                    
+                    {/* Overlay yang muncul saat di-hover */}
+                    <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center cursor-pointer transition-opacity text-white backdrop-blur-sm">
+                      <Upload size={24} className="mb-2" />
+                      <span className="text-[14px] font-[600]">
+                        {uploadingCover ? "Mengunggah..." : "Ganti Gambar Sampul"}
+                      </span>
+                      <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" disabled={uploadingCover} />
+                    </label>
+                  </div>
+                ) : (
+                  <label className="w-full h-[160px] cursor-pointer flex flex-col items-center justify-center gap-[12px] bg-[var(--bg)] border border-[var(--border)] border-dashed rounded-[8px] px-[16px] py-[10px] text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--text-primary)] transition-colors">
+                    <Upload size={28} />
+                    <span className="text-[14px]">
+                      {uploadingCover ? "Mengunggah..." : "Pilih File Gambar Lokal"}
+                    </span>
+                    <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" disabled={uploadingCover} />
+                  </label>
                 )}
-                <label className="flex-1 cursor-pointer flex items-center justify-center gap-[8px] bg-[var(--bg)] border border-[var(--border)] border-dashed rounded-[8px] px-[16px] py-[10px] text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--text-primary)] transition-colors">
-                  <Upload size={16} />
-                  <span className="text-[14px]">{uploadingCover ? "Mengunggah..." : "Pilih File Gambar Lokal"}</span>
-                  <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" disabled={uploadingCover} />
-                </label>
               </div>
             </div>
             <div>
