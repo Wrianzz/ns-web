@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { databases, storage, APPWRITE_DB_ID, APPWRITE_COLLECTION_EVENTS, APPWRITE_BUCKET_ID, ID, useAuthState } from "../lib/appwrite";
+import { Permission, Role } from "appwrite";
 import { Save, ArrowLeft, Upload } from "lucide-react";
 
 declare global {
@@ -19,16 +20,25 @@ export function AdminEventEditor() {
   const [image, setImage] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(!!id);
+  const [initialLoading, setInitialLoading] = useState(!!id && id !== "new");
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editorRef = useRef<any>(null);
   const contentRef = useRef<string>("");
 
-  const uploadToAppwrite = async (file: File) => {
-    const uploadedFile = await storage.createFile(APPWRITE_BUCKET_ID, ID.unique(), file);
-    const fileUrl = storage.getFileView(APPWRITE_BUCKET_ID, uploadedFile.$id);
-    return fileUrl.href;
+  const uploadToAppwrite = async (file: File | Blob, filename = "image.png") => {
+    const actualFile = file instanceof File ? file : new File([file], filename, { type: file.type });
+    
+    const uploadedFile = await storage.createFile(
+      APPWRITE_BUCKET_ID, 
+      ID.unique(), 
+      actualFile,
+      [Permission.read(Role.any())]
+    );
+    
+    const fileView = storage.getFileView(APPWRITE_BUCKET_ID, uploadedFile.$id);
+    const url = typeof fileView === "string" ? fileView : fileView.toString();
+    return url;
   };
 
   const handleThumbnailUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -36,13 +46,14 @@ export function AdminEventEditor() {
     if (!file) return;
     setUploadingImage(true);
     try {
-      const url = await uploadToAppwrite(file);
+      const url = await uploadToAppwrite(file, file.name);
       setImage(url);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Gagal upload thumbnail:", error);
-      alert("Gagal mengunggah gambar thumbnail.");
+      alert("Gagal mengunggah gambar thumbnail: " + error.message);
     } finally {
       setUploadingImage(false);
+      e.target.value = "";
     }
   };
 
@@ -65,11 +76,9 @@ export function AdminEventEditor() {
         branding: false,
         promotion: false,
         
-        // KONFIGURASI UPLOAD GAMBAR TINYMCE KE APPWRITE
         images_upload_handler: async (blobInfo: any) => {
           try {
-            const file = blobInfo.blob() as File;
-            const url = await uploadToAppwrite(file);
+            const url = await uploadToAppwrite(blobInfo.blob(), blobInfo.filename());
             return url;
           } catch (err: any) {
             throw new Error("Gagal mengunggah: " + err.message);
@@ -107,7 +116,7 @@ export function AdminEventEditor() {
 
   useEffect(() => {
     const fetchEvent = async () => {
-      if (!id) return;
+      if (!id || id === "new") return;
       try {
         const docSnap = await databases.getDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_EVENTS, id);
         if (docSnap) {
@@ -146,7 +155,7 @@ export function AdminEventEditor() {
         updatedAt: new Date().toISOString(),
       };
 
-      if (id) {
+      if (id && id !== "new") {
         await databases.updateDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_EVENTS, id, payload);
       } else {
         await databases.createDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_EVENTS, ID.unique(), {
@@ -156,8 +165,9 @@ export function AdminEventEditor() {
         });
       }
       navigate("/admin/events");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save event", error);
+      alert("Gagal menyimpan ke database: " + error.message);
       setSaving(false);
     }
   };
@@ -197,8 +207,6 @@ export function AdminEventEditor() {
           </div>
           <div>
             <label className="block text-[13px] font-[600] text-[var(--text-secondary)] mb-[8px]">Gambar Thumbnail Event</label>
-            
-            {/* UPLOAD EVENT IMAGE AREA */}
             <div className="flex items-center gap-[12px]">
               {image && (
                 <img src={image} alt="Thumbnail Preview" className="h-[42px] w-[60px] object-cover rounded-[4px] border border-[var(--border)]" />
@@ -209,7 +217,6 @@ export function AdminEventEditor() {
                 <input type="file" accept="image/*" onChange={handleThumbnailUpload} className="hidden" disabled={uploadingImage} />
               </label>
             </div>
-
           </div>
         </div>
 

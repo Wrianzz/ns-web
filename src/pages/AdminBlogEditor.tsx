@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { databases, storage, APPWRITE_DB_ID, APPWRITE_COLLECTION_BLOGS, APPWRITE_BUCKET_ID, ID, useAuthState } from "../lib/appwrite";
+import { Permission, Role } from "appwrite";
 import { Save, ArrowLeft, Upload } from "lucide-react";
 
 declare global {
@@ -19,17 +20,27 @@ export function AdminBlogEditor() {
   const [tags, setTags] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(!!id);
+  const [initialLoading, setInitialLoading] = useState(!!id && id !== "new");
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const editorRef = useRef<any>(null);
   const contentRef = useRef<string>("");
 
-  // Fungsi untuk upload gambar (dipakai TinyMCE & Cover)
-  const uploadImageToAppwrite = async (file: File) => {
-    const uploadedFile = await storage.createFile(APPWRITE_BUCKET_ID, ID.unique(), file);
-    const fileUrl = storage.getFileView(APPWRITE_BUCKET_ID, uploadedFile.$id);
-    return fileUrl.href;
+  // KODE FIX UTAMA: Konversi yang benar dan cegah undefined URL
+  const uploadImageToAppwrite = async (file: File | Blob, filename = "image.png") => {
+    const actualFile = file instanceof File ? file : new File([file], filename, { type: file.type });
+    
+    const uploadedFile = await storage.createFile(
+      APPWRITE_BUCKET_ID, 
+      ID.unique(), 
+      actualFile,
+      [Permission.read(Role.any())] // Memaksa agar file bisa dibaca publik
+    );
+    
+    const fileView = storage.getFileView(APPWRITE_BUCKET_ID, uploadedFile.$id);
+    // Hindari pemakaian .href langsung karena rawan menjadi undefined
+    const url = typeof fileView === "string" ? fileView : fileView.toString();
+    return url;
   };
 
   const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -37,13 +48,14 @@ export function AdminBlogEditor() {
     if (!file) return;
     setUploadingCover(true);
     try {
-      const url = await uploadImageToAppwrite(file);
+      const url = await uploadImageToAppwrite(file, file.name);
       setCoverImage(url);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Gagal upload cover:", error);
-      alert("Gagal mengunggah gambar cover.");
+      alert("Gagal mengunggah gambar cover: " + error.message);
     } finally {
       setUploadingCover(false);
+      e.target.value = ""; 
     }
   };
 
@@ -66,12 +78,10 @@ export function AdminBlogEditor() {
         branding: false,
         promotion: false,
         
-        // KONFIGURASI UPLOAD GAMBAR TINYMCE KE APPWRITE
         images_upload_handler: async (blobInfo: any) => {
           try {
-            const file = blobInfo.blob() as File;
-            const url = await uploadImageToAppwrite(file);
-            return url; // TinyMCE otomatis memasang URL ini ke tag <img>
+            const url = await uploadImageToAppwrite(blobInfo.blob(), blobInfo.filename());
+            return url;
           } catch (err: any) {
             throw new Error("Gagal mengunggah: " + err.message);
           }
@@ -108,7 +118,7 @@ export function AdminBlogEditor() {
 
   useEffect(() => {
     const fetchBlog = async () => {
-      if (!id) return;
+      if (!id || id === "new") return;
       try {
         const docSnap = await databases.getDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_BLOGS, id);
         if (docSnap) {
@@ -152,7 +162,7 @@ export function AdminBlogEditor() {
         readTime: `${Math.max(1, Math.ceil(wordCount / 200))} min read`
       };
 
-      if (id) {
+      if (id && id !== "new") {
         await databases.updateDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_BLOGS, id, payload);
       } else {
         await databases.createDocument(APPWRITE_DB_ID, APPWRITE_COLLECTION_BLOGS, ID.unique(), {
@@ -164,8 +174,9 @@ export function AdminBlogEditor() {
         });
       }
       navigate("/admin/blogs");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save blog", error);
+      alert("Gagal menyimpan ke database: " + error.message);
       setSaving(false);
     }
   };
@@ -200,8 +211,6 @@ export function AdminBlogEditor() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-[16px]">
             <div>
               <label className="block text-[13px] font-[600] text-[var(--text-secondary)] mb-[8px]">Gambar Sampul</label>
-              
-              {/* UPLOAD COVER IMAGE AREA */}
               <div className="flex items-center gap-[12px]">
                 {coverImage && (
                   <img src={coverImage} alt="Cover Preview" className="h-[42px] w-[60px] object-cover rounded-[4px] border border-[var(--border)]" />
@@ -212,7 +221,6 @@ export function AdminBlogEditor() {
                   <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" disabled={uploadingCover} />
                 </label>
               </div>
-
             </div>
             <div>
               <label className="block text-[13px] font-[600] text-[var(--text-secondary)] mb-[8px]">Tags (Pisahkan dengan koma)</label>
